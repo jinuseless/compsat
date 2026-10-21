@@ -1,0 +1,45 @@
+name: Build installers
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\CompSat.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CompSat-Windows-Installer
+          path: dist/CompSat-Setup.exe
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (Apple Silicon + Intel)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Ad-hoc sign and make installer
+        run: |
+          VST=build/CompSat_artefacts/Release/VST3/CompSat.vst3
+          codesign --force --deep -s - "$VST"
+          mkdir -p dist
+          pkgbuild --component "$VST" \
+            --install-location "/Library/Audio/Plug-Ins/VST3" \
+            --identifier com.yourname.compsat \
+            --version 1.0.0 dist/CompSat-Mac.pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CompSat-Mac-Installer
+          path: dist/CompSat-Mac.pkg
